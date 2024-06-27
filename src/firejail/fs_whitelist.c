@@ -341,6 +341,48 @@ static void tmpfs_topdirs(const TopDir * const topdirs) {
 			continue;
 		}
 
+		// Check whether mount bind tmpfs on topdirs[i].path will affect delayed links
+		// Mount bind tmpfs on topdirs[i].path has the same meaning that blacklisting topdirs[i].path)
+		// exсept that whitelisted entires will be restored topdirs[i].path inside later.
+		DelayedLinkEntry *ptr = get_blacklisted_delayed_links(topdirs[i].path);
+		while (ptr) {
+			ProfileEntry *entry = cfg.profile;
+			DelayedLinkEntry *tmp = NULL;
+			bool is_whitelisted = false;
+
+			// Check whether there is exist whitelist option which will save delayed link
+			while (entry) {
+					if (entry->wparam &&
+						strncmp(ptr->resolved_filename,
+								entry->wparam->file,
+								strlen(entry->wparam->file)) == 0) {
+							is_whitelisted = true;
+							break;
+					}
+
+					entry = entry->next;
+			}
+
+            if (is_whitelisted) {
+				printf(
+					"Delayed link %s is whitelisted by %s so it will not be "
+					"hidden by topdir %s\n",
+					ptr->resolved_filename, entry->wparam->file, topdirs[i].path);
+				tmp = ptr;
+				ptr = ptr->next;
+				delayed_links_add_entry(tmp);
+			} else {
+				printf(
+					"Delayed link %s is hidden by topdir %s so fcopy "
+					"it with '--follow-link'\n",
+					ptr->resolved_filename, topdirs[i].path);
+				sbox_run(SBOX_ROOT | SBOX_SECCOMP, 4, PATH_FCOPY, "--follow-link", ptr->link_filename, ptr->dest);
+				tmp = ptr;
+				ptr = ptr->next;
+				free_delayed_link(tmp);
+			}
+		}
+
 		// special case /run
 		// open /run/firejail, so it can be restored right after mounting the tmpfs
 		int fd = -1;

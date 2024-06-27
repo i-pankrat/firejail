@@ -1755,6 +1755,87 @@ int profile_check_line(char *ptr, int lineno, const char *fname) {
 	return 1;
 }
 
+// TODO: move new funcitons to delayed_links.c?
+DelayedLinkEntry *get_blacklisted_delayed_links(char *blacklist_path) {
+	char *rblacklist_path = realpath(blacklist_path, NULL);
+	if (rblacklist_path == NULL)
+		errExit("realpath");
+
+	DelayedLinkEntry *prev = NULL;
+	DelayedLinkEntry *ptr = cfg.delayed_links;
+
+	DelayedLinkEntry *blacklisted_links = NULL;
+	DelayedLinkEntry *new_blacklisted_link = NULL;
+
+	int cnt = 0;
+	while (ptr) {
+		if (strncmp(ptr->resolved_filename, rblacklist_path, strlen(rblacklist_path)) == 0) {
+			cnt++;
+			// Remove link from the delayed links
+			if (prev)
+				prev->next = ptr->next;
+			else
+				cfg.delayed_links = ptr->next;
+
+			// Add link to the result list
+			new_blacklisted_link = ptr;
+			ptr = ptr->next;
+			new_blacklisted_link->next = NULL;
+	
+			if (blacklisted_links) {
+				new_blacklisted_link->next = blacklisted_links;
+				blacklisted_links = new_blacklisted_link;
+			}
+			else
+				blacklisted_links = new_blacklisted_link;
+		} else {
+			prev = ptr;
+			ptr = ptr->next;
+		}
+	}
+
+	return blacklisted_links;
+} 
+
+void delayed_links_add_entry(DelayedLinkEntry *link) {
+
+	if (!link)
+		return;
+
+	link->next = cfg.delayed_links;
+	cfg.delayed_links = link;
+}
+
+void free_delayed_link(DelayedLinkEntry *link) {
+	free(link->link_filename);
+	free(link->resolved_filename);
+	free(link->dest);
+	free(link);
+}
+
+void delayed_links_add(char *src, char *dst) {
+	char *rsrc = realpath(src, NULL);
+	if (rsrc == NULL)
+		errExit("realpath");
+
+	DelayedLinkEntry *link = malloc(sizeof(DelayedLinkEntry));
+	
+	if (link == NULL)
+		errExit("malloc");
+
+	memset(link, 0, sizeof(DelayedLinkEntry));
+
+	link->next = NULL;
+	link->link_filename = strdup(src);
+	link->resolved_filename = rsrc;
+	link->dest = strdup(dst);
+
+	if (link->link_filename == NULL || link->dest == NULL)
+		errExit("stdup");
+
+	delayed_links_add_entry(link);
+}
+
 // add a profile entry in cfg.profile list; use str to populate the list
 void profile_add(char *str) {
 	EUID_ASSERT();

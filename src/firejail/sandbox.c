@@ -1042,7 +1042,8 @@ int sandbox(void* sandbox_arg) {
 			 * 2. unmount bind mounts from /etc
 			 * 3. mount RUN_ETC_DIR at /etc
 			 */
-			timetrace_start();
+
+			// TODO: Think about timer of creating private etc, for now it's removed
 			cfg.etc_private_keep = fs_etc_build(cfg.etc_private_keep);
 			fs_private_dir_copy("/etc", RUN_ETC_DIR, cfg.etc_private_keep);
 
@@ -1050,9 +1051,6 @@ int sandbox(void* sandbox_arg) {
 				fprintf(stderr, "/etc/group: unmount: %s\n", strerror(errno));
 			if (umount2("/etc/passwd", MNT_DETACH) == -1)
 				fprintf(stderr, "/etc/passwd: unmount: %s\n", strerror(errno));
-
-			fs_private_dir_mount("/etc", RUN_ETC_DIR);
-			fmessage("Private /etc installed in %0.2f ms\n", timetrace_end());
 
 			// create /etc/ld.so.preload file again
 			if (need_preload)
@@ -1074,7 +1072,13 @@ int sandbox(void* sandbox_arg) {
 
 	// ... followed by blacklist commands
 	fs_blacklist(); // mkdir and mkfile are processed all over again
+	// Continue to create private-etc.
 	EUID_ROOT();
+	// create delayed links from etc
+	fs_create_delayed_links();
+	// bind mount /etc after delayed links were created
+	fs_private_dir_mount("/etc", RUN_ETC_DIR);
+	fmessage("Base filesystem installed in %0.2f ms\n", timetrace_end());
 
 	//****************************
 	// nosound/no3d/notv/novideo and fix for pulseaudio 7.0

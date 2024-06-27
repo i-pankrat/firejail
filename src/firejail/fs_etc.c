@@ -285,17 +285,30 @@ static void duplicate(const char *fname, const char *private_dir, const char *pr
 
 	build_dirs(src, dst, strlen(private_dir), strlen(private_run_dir));
 
-	// follow links by default, thus making a copy of the file or directory pointed by the symlink
-	// this will solve problems such as NixOS #4887
-	//
-	// don't follow links to dynamic directories such as /proc
-	if (strcmp(src, "/etc/mtab") == 0)
-		sbox_run(SBOX_ROOT | SBOX_SECCOMP, 3, PATH_FCOPY, src, dst);
-	else
+	// Delay link creation until we are or are not sure that the final link file
+	// will be available in the sandbox. If the final link file is not available,
+	// we copy it with the --follow-link parameter, otherwise without the parameter.
+	if (is_link(src)) {
+		printf("Delay creating link %s in the sandbox\n", src);
+		delayed_links_add(src, dst);
+	} else
 		sbox_run(SBOX_ROOT | SBOX_SECCOMP, 4, PATH_FCOPY, "--follow-link", src, dst);
 
 	free(dst);
 	fs_logger2("clone", src);
+}
+
+void fs_create_delayed_links() {
+	DelayedLinkEntry *ptr = cfg.delayed_links;
+	DelayedLinkEntry *tmp = NULL;
+
+	while (ptr != NULL) {
+		printf("Create delayed link %s\n", ptr->link_filename);
+		sbox_run(SBOX_ROOT | SBOX_SECCOMP, 3, PATH_FCOPY, ptr->link_filename, ptr->dest);
+		tmp = ptr;
+		ptr = ptr->next;
+		free_delayed_link(tmp);
+	}
 }
 
 static void duplicate_globbing(const char *fname, const char *private_dir, const char *private_run_dir) {

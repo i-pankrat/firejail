@@ -121,6 +121,20 @@ static void disable_file(OPERATION op, const char *filename) {
 
 	// modify the file
 	if (op == BLACKLIST_FILE || op == BLACKLIST_NOLOG) {
+		DelayedLinkEntry *curr = get_blacklisted_delayed_links(fname);
+		DelayedLinkEntry *tmp = NULL;
+
+		while (curr) {
+			printf(
+				"Resolved path for delayed link %s is going to be "
+				"blacklisted so fcopy it with '--follow-link'\n",
+				curr->link_filename);
+			sbox_run(SBOX_ROOT | SBOX_SECCOMP, 4, PATH_FCOPY, "--follow-link", curr->link_filename, curr->dest);
+			tmp = curr;
+			curr = curr->next;
+			free_delayed_link(tmp);
+		}
+			
 		// some distros put all executables under /usr/bin and make /bin a symbolic link
 		if ((strcmp(fname, "/bin") == 0 || strcmp(fname, "/usr/bin") == 0) &&
 		    is_link(filename) &&
@@ -465,8 +479,6 @@ void fs_blacklist(void) {
 	for (i = 0; i < noblacklist_c; i++)
 		free(noblacklist[i]);
 	free(noblacklist);
-
-	fmessage("Base filesystem installed in %0.2f ms\n", timetrace_end());
 }
 
 //***********************************************

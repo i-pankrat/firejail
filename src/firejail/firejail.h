@@ -150,6 +150,13 @@ typedef struct profile_entry_t {
 
 } ProfileEntry;
 
+typedef struct delayed_link_entry_t {
+	struct delayed_link_entry_t *next;
+	char *link_filename;
+	char *resolved_filename;
+	char *dest;
+} DelayedLinkEntry;
+
 typedef struct landlock_entry_t {
 	struct landlock_entry_t *next;
 #define LL_FS_READ 0
@@ -171,6 +178,7 @@ typedef struct config_t {
 	// filesystem
 	ProfileEntry *profile;
 	ProfileEntry *profile_rebuild_etc;	// blacklist files in /etc directory used by fs_rebuild_etc()
+	DelayedLinkEntry *delayed_links; // delay links until we can copy them correctly
 	LandlockEntry *lprofile;
 
 #define MAX_PROFILE_IGNORE 32
@@ -493,6 +501,12 @@ void profile_add_ignore(const char *str);
 char *profile_list_normalize(char *list);
 char *profile_list_compress(char *list);
 void profile_list_augment(char **list, const char *items);
+
+void fs_create_delayed_links();
+DelayedLinkEntry *get_blacklisted_delayed_links(char *blacklist_path);
+void delayed_links_add_entry(DelayedLinkEntry *link);
+void delayed_links_add(char *src, char *dst);
+void free_delayed_link(DelayedLinkEntry *link);
 
 // list.c
 void list(void);
